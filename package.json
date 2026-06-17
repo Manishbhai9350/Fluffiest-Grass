@@ -1,0 +1,23 @@
+{
+  "name": "fluffiest-grass",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "@tweakpane/core": "^2.0.5",
+    "@types/three": "^0.184.1",
+    "three": "^0.184.0",
+    "tsl": "^1.0.30",
+    "tweakpane": "^4.0.5",
+    "webgpu": "^0.4.0"
+  }
+}
