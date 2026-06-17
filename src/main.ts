@@ -1,89 +1,9 @@
 import "./style.css";
 
-import {
-  BoxGeometry,
-  Color,
-  Mesh,
-  MeshBasicNodeMaterial,
-  UniformNode,
-  WebGPURenderer,
-} from "three/webgpu";
-import {
-  normalLocal,
-  vec4,
-  mix,
-  dot,
-  vec3,
-  color,
-  uniform,
-  Fn,
-  uv,
-  normalWorld,
-} from "three/tsl";
-import { PerspectiveCamera, Scene, type Material } from "three";
+import { Color, WebGPURenderer } from "three/webgpu";
+import { PerspectiveCamera, Scene } from "three";
 import { Clock } from "./Clock";
-import { Debug } from "./utils/debug";
-
-// ── Cube ──────────────────────────────────────────────────────────────────────
-
-class Cube {
-  mesh: Mesh;
-
-  // ── correct types for TSL uniforms ───────────────────────────────────────────
-  colorA: UniformNode<"color", Color>;
-  colorB: UniformNode<"color", Color>;
-  private debug: Debug;
-
-  material: MeshBasicNodeMaterial;
-
-  constructor(scene: Scene) {
-    this.debug = Debug.getInstance();
-
-    const geometry = new BoxGeometry(1, 1, 1);
-    this.material = new MeshBasicNodeMaterial();
-
-    this.colorA = uniform(new Color("#cd2f86"));
-    this.colorB = uniform(new Color("#16cb19"));
-
-    this.material.colorNode = Fn(() => {
-      return mix(this.colorA, this.colorB, normalWorld.x);
-    })();
-
-    this.mesh = new Mesh(geometry, this.material);
-    scene.add(this.mesh);
-
-    this.initDebugs();
-  }
-
-  initDebugs() {
-    this.debug.addColor({
-      folder: "Cube",
-      initialColor: this.colorA.value,
-      label: "Color A",
-      onChange: (color) => {
-        this.colorA.value.set(color);
-      },
-    });
-    this.debug.addColor({
-      folder: "Cube",
-      initialColor: this.colorB.value,
-      label: "Color B",
-      onChange: (color) => {
-        this.colorB.value.set(color);
-      },
-    });
-  }
-
-  update(clock: Clock) {
-    this.mesh.rotation.x = clock.getElapsedTime() * 0.5;
-    this.mesh.rotation.y = clock.getElapsedTime() * 0.8;
-  }
-
-  dispose() {
-    this.mesh.geometry.dispose();
-    (this.mesh.material as Material).dispose();
-  }
-}
+import { Cube } from "./entities/cube";
 
 // ── Scene ──────────────────────────────────────────────────────────────
 
