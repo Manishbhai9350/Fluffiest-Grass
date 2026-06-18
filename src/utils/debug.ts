@@ -23,7 +23,7 @@ interface DebugColor {
   folder: string;
   label: string;
   initialColor: THREE.Color; // ← now accepts Color directly
-  onChange: (color: THREE.Color) => void;
+  onChange?: (color: THREE.Color) => void;
 }
 
 interface DebugMonitor<T extends Bindable> {
@@ -125,7 +125,7 @@ export class Debug {
         const val = e.value as { r: number; g: number; b: number };
         // mutate the original color in place — keeps the reference alive
         initialColor.setRGB(val.r, val.g, val.b);
-        onChange(initialColor);
+        onChange?.(initialColor);
       },
     );
 

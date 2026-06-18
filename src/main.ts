@@ -4,9 +4,7 @@ import {
   AmbientLight,
   Color,
   DirectionalLight,
-  Group,
   Mesh,
-  MeshStandardNodeMaterial,
   WebGPURenderer,
 } from "three/webgpu";
 import { PerspectiveCamera, Scene } from "three";
@@ -14,17 +12,17 @@ import { Clock } from "./Clock";
 import { Assets } from "./assets/assets";
 import { manifest } from "./assets/assets.manifest";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
-import { Fn, positionLocal, step, vec4 } from "three/tsl";
+import { Terrain } from "./entities/terrain";
 
 // ── Scene ──────────────────────────────────────────────────────────────
 
 class App {
+  controls: OrbitControls;
+  terrain: Terrain;
   private renderer: WebGPURenderer;
   private scene: Scene;
   private camera: PerspectiveCamera;
-  private controls: OrbitControls;
   private clock: Clock;
-  private terrain: Mesh;
   private assets: Assets;
   private animFrameId: number = 0;
   private lastFrameTime = performance.now();
@@ -49,6 +47,7 @@ class App {
       100,
     );
     this.camera.position.set(-2, 2, 2);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
     this.clock = new Clock();
     this.assets = new Assets();
@@ -58,29 +57,22 @@ class App {
 
   private async init() {
     await Promise.all([this.renderer.init(), this.assets.load(manifest)]);
-    this.resize();
-    this.loop();
 
-    console.log(this.assets.assets);
-
-    this.terrain = this.assets.assets.terrain.scene
+    const TerrainMesh = this.assets.assets.terrain.scene
       .children[0] as unknown as Mesh;
-    this.terrain.scale.setScalar(1);
-    this.scene.add(this.terrain);
-
-    this.terrain.material = new MeshStandardNodeMaterial();
-
-    this.terrain.material.colorNode = Fn(() => {
-      return vec4(step(positionLocal.y,.17),.0,.0, 1.0);
-    })();
-
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.terrain = new Terrain(TerrainMesh, this.scene);
 
     this.scene.add(new AmbientLight(0xffffff, 0.5));
 
     const dir = new DirectionalLight(0xffffff, 2);
     dir.position.set(2, 2, 2);
-    this.scene.add(dir);
+
+    const dir2 = new DirectionalLight(0xffffff, 1);
+    dir2.position.set(0, 4, 0);
+    this.scene.add(dir, dir2);
+
+    this.resize();
+    this.loop();
 
     window.addEventListener("resize", this.onResize);
   }
@@ -104,6 +96,9 @@ class App {
 
     // Throttled telemetry out to the UI — this is the engine "talking".
     this.tickAccumulator += delta;
+
+    this.terrain.update(delta);
+
     this.renderer.render(this.scene, this.camera);
   }
 
