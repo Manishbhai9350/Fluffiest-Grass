@@ -4,26 +4,28 @@ import {
   AmbientLight,
   Color,
   DirectionalLight,
+  Group,
   Mesh,
   WebGPURenderer,
 } from "three/webgpu";
 import { PerspectiveCamera, Scene } from "three";
 import { Clock } from "./Clock";
-import { Assets } from "./assets/assets";
 import { manifest } from "./assets/assets.manifest";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
 import { Terrain } from "./entities/terrain";
+import { Loader, type ResolvedManifest } from "./assets/loader";
 
 // ── Scene ──────────────────────────────────────────────────────────────
 
 class App {
   controls: OrbitControls;
-  terrain: Terrain;
+  terrain!: Terrain;
   private renderer: WebGPURenderer;
   private scene: Scene;
   private camera: PerspectiveCamera;
   private clock: Clock;
-  private assets: Assets;
+  private loader: Loader;
+  private assets!: ResolvedManifest;
   private animFrameId: number = 0;
   private lastFrameTime = performance.now();
   private tickAccumulator = 0;
@@ -50,16 +52,16 @@ class App {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
     this.clock = new Clock();
-    this.assets = new Assets();
+    this.loader = new Loader();
 
     this.init();
   }
 
   private async init() {
-    await Promise.all([this.renderer.init(), this.assets.load(manifest)]);
+    await Promise.all([this.renderer.init(), this.loader.load(manifest)]);
 
-    const TerrainMesh = this.assets.assets.terrain.scene
-      .children[0] as unknown as Mesh;
+    const TerrainScene = this.assets.terrain.scene as Group;
+    const TerrainMesh = TerrainScene.children[0] as unknown as Mesh;
     this.terrain = new Terrain(TerrainMesh, this.scene);
 
     this.scene.add(new AmbientLight(0xffffff, 0.5));
