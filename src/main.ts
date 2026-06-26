@@ -60,9 +60,11 @@ class App {
   private async init() {
     await Promise.all([this.renderer.init(), this.loader.load(manifest)]);
 
+    this.assets = this.loader.assets;
+
     const TerrainScene = this.assets.terrain.scene as Group;
     const TerrainMesh = TerrainScene.children[0] as unknown as Mesh;
-    this.terrain = new Terrain(TerrainMesh, this.scene);
+    this.terrain = new Terrain(TerrainMesh, this.scene, this.renderer);
 
     this.scene.add(new AmbientLight(0xffffff, 0.5));
 
