@@ -12,7 +12,7 @@ import { PerspectiveCamera, Scene } from "three";
 import { Clock } from "./Clock";
 import { manifest } from "./assets/assets.manifest";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
-import { Terrain } from "./entities/terrain";
+import { Terrain } from "./components/Terrain/terrain";
 import { Loader, type ResolvedManifest } from "./assets/loader";
 
 // ── Scene ──────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ class App {
 
     const TerrainScene = this.assets.terrain.scene as Group;
     const TerrainMesh = TerrainScene.children[0] as unknown as Mesh;
-    this.terrain = new Terrain(TerrainMesh, this.scene, this.renderer);
+    this.terrain = new Terrain(TerrainMesh, this.scene, this.renderer, this.assets);
 
     this.scene.add(new AmbientLight(0xffffff, 0.5));
 
