@@ -2,13 +2,18 @@ import {
   Box3,
   BufferGeometry,
   Color,
+  ConstNode,
   InstancedMesh,
   MathUtils,
   MeshBasicMaterial,
   MeshStandardNodeMaterial,
+  Node,
   Object3D,
   Quaternion,
+  RepeatWrapping,
   Texture,
+  VarNode,
+  Vector2,
   Vector3,
   WebGPURenderer,
   type Mesh,
@@ -35,6 +40,10 @@ import {
   time,
   vec2,
   sin,
+  fract,
+  step,
+  float,
+  floor,
 } from "three/tsl";
 import {
   BakeHeightmap,
@@ -71,7 +80,12 @@ export class Terrain {
     uMaxY: uniform(0),
 
     // Grass:
-    uNoiseFrequency: uniform(19),
+    uNoiseFrequency: uniform(0.5),
+    uWindSpeed: uniform(.96), // how fast the pulse travels
+    uWindFrequency: uniform(0.17), // spatial frequency — lower = wider gap
+    uWindDuty: uniform(0.07), // pulse width as fraction of cycle (0.1 = short, 0.4 = long)
+    uWindRamp: uniform(0.026),
+    uWindGapVariation: uniform(1),
   };
 
   constructor(
@@ -139,23 +153,69 @@ export class Terrain {
 
     const GrassMaterial = new MeshStandardNodeMaterial();
 
+    this.assets.perlin.wrapS = this.assets.perlin.wrapT = RepeatWrapping;
+    const perlinTexture = texture(this.assets.perlin);
+
+    const perlin2d = Fn(([coords]: [Node<"vec2">]) => {
+      return perlinTexture.sample(coords).x;
+    });
+
     GrassMaterial.colorNode = Fn(() => {
-      const noise = mx_fractal_noise_float(
-        positionWorld.xz
-          .mul(vec2(2, 0.3))
-          .mul(this.uniforms.uNoiseFrequency.mul(0.1))
-          .add(vec2(time, time.mul(0.1).mul(sin(time.mul(0.3))))),
+      // ── wind pulse with gap variation ─────────────────────────────────────────
+      const windOffset = positionWorld.x
+        .add(positionWorld.z.mul(0.3))
+        .add(time.mul(this.uniforms.uWindSpeed));
+
+      // which "stripe band" are we in — integer index
+      const stripeIndex = floor(windOffset.mul(this.uniforms.uWindFrequency));
+
+      // random offset per stripe — breaks the regular spacing
+      const stripeRandom = fract(sin(stripeIndex.mul(127.1)).mul(43758.5453));
+
+      // extra random gap delay per stripe — multiplied by uWindGapVariation
+      // so at 0 all gaps are equal, at 1 gaps vary wildly
+      const gapOffset = stripeRandom.mul(this.uniforms.uWindGapVariation);
+
+      // local position within the cycle, shifted by per-stripe random
+      const cycle = fract(
+        fract(windOffset.mul(this.uniforms.uWindFrequency)).add(gapOffset),
       );
 
-      noise.assign(smoothstep(0, 1, noise));
+      // pulse shape — same as before
+      const inPulse = smoothstep(float(0), this.uniforms.uWindRamp, cycle).mul(
+        smoothstep(
+          this.uniforms.uWindDuty,
+          this.uniforms.uWindDuty.sub(this.uniforms.uWindRamp),
+          cycle,
+        ),
+      );
 
-      // return vec4(noise, 0, 0, 1);
+      // modulate with noise to break regularity
+      const noise = perlin2d(
+        positionWorld.xz
+          .mul(this.uniforms.uNoiseFrequency.mul(0.5))
+          .add(vec2(time.mul(0.1), float(0))),
+      )
+        .mul(0.5)
+        .add(0.5);
+
+      const wind = inPulse.mul(noise);
+
+      // ── color ───────────────────────────────────────────────────────────────
       const blendedGrassColor = mix(
         vec3(0.42, 0.8, 0.09),
         vec3(0.24, 0.35, 0.02),
-        uv().x,
+        uv().x, // bright tip → dark base
       );
-      const finalColor = mix(blendedGrassColor, this.uniforms.darkgrass, noise);
+
+      const finalColor = mix(
+        blendedGrassColor,
+        this.uniforms.darkgrass,
+        wind, // dark where wind passes
+      );
+
+      // finalColor.assign(vec3(wind, 0, 0));
+
       return vec4(finalColor, 1.0);
     })();
 
@@ -194,17 +254,13 @@ export class Terrain {
 
     this.scene.add(InstancedGrass);
   }
-
   private initTweeks() {
-    // Terrain Tweeks
+    // ── Terrain ──────────────────────────────────────────────────────────────
     this.debug.add({
       folder: "Terrain",
       object: this.uniforms,
       key: "roughness",
-      options: {
-        min: 0,
-        max: 1,
-      },
+      options: { min: 0, max: 1 },
       onChange: (v) => {
         this.terrainMaterial.roughness = v as number;
       },
@@ -213,15 +269,11 @@ export class Terrain {
       folder: "Terrain",
       object: this.uniforms,
       key: "metalness",
-      options: {
-        min: 0,
-        max: 1,
-      },
+      options: { min: 0, max: 1 },
       onChange: (v) => {
         this.terrainMaterial.metalness = v as number;
       },
     });
-
     this.debug.addColor({
       folder: "Terrain",
       initialColor: this.uniforms.grass.value,
@@ -233,18 +285,44 @@ export class Terrain {
       label: "Sand",
     });
 
-    // Grass Tweeks;
-
+    // ── Grass Noise ───────────────────────────────────────────────────────────
     this.debug.add({
       folder: "Grass",
       object: this.uniforms.uNoiseFrequency,
       key: "value",
-      options: {
-        min: 0,
-        max: 100,
-        step: 0.01,
-        label: "Noise Freq",
-      },
+      options: { min: 0, max: 1, step: 0.01, label: "Noise Freq" },
+    });
+
+    // ── Wind ──────────────────────────────────────────────────────────────────
+    this.debug.add({
+      folder: "Grass",
+      object: this.uniforms.uWindSpeed,
+      key: "value",
+      options: { min: 0, max: 5, step: 0.01, label: "Wind Speed" },
+    });
+    this.debug.add({
+      folder: "Grass",
+      object: this.uniforms.uWindFrequency,
+      key: "value",
+      options: { min: 0, max: 2, step: 0.01, label: "Wind Frequency" },
+    });
+    this.debug.add({
+      folder: "Grass",
+      object: this.uniforms.uWindDuty,
+      key: "value",
+      options: { min: 0.01, max: 0.99, step: 0.01, label: "Wind Duty" },
+    });
+    this.debug.add({
+      folder: "Grass",
+      object: this.uniforms.uWindRamp,
+      key: "value",
+      options: { min: 0.001, max: 0.2, step: 0.001, label: "Wind Ramp" },
+    });
+    this.debug.add({
+      folder: "Grass",
+      object: this.uniforms.uWindGapVariation,
+      key: "value",
+      options: { min: 0, max: 1, step: 0.01, label: "Wind Gap Variation" },
     });
   }
 
