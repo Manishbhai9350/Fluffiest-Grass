@@ -16,8 +16,9 @@ export type AssetEntry =
 export const manifest = {
   terrain: { type: "model", url: "/models/terrain.glb" },
   grass_blade: { type: "model", url: "/models/grass_blade.glb" },
+  tiles: { type: "model", url: "/models/tiles.glb" },
+  perlin: { type: "texture", url: "/textures/perlin_texture.png" },
 
-  perlin: { type: "texture", url: "/textures/perlin_texture.png" }
 } as const;
 
 // Now 'typeof manifest' preserves the literal "model" instead of widening to "string"

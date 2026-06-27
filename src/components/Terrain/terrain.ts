@@ -5,6 +5,7 @@ import {
   ConstNode,
   InstancedMesh,
   MathUtils,
+  Mesh,
   MeshBasicMaterial,
   MeshStandardNodeMaterial,
   Node,
@@ -16,7 +17,6 @@ import {
   Vector2,
   Vector3,
   WebGPURenderer,
-  type Mesh,
   type Scene,
   type TextureEventMap,
 } from "three/webgpu";
@@ -64,6 +64,8 @@ export class Terrain {
   private renderer: WebGPURenderer;
   private assets: ResolvedManifest;
 
+  private tiles!: Mesh[];
+
   private uniforms = {
     roughness: 0,
     metalness: 0,
@@ -81,11 +83,13 @@ export class Terrain {
 
     // Grass:
     uNoiseFrequency: uniform(0.5),
-    uWindSpeed: uniform(.96), // how fast the pulse travels
+    uWindSpeed: uniform(0.96), // how fast the pulse travels
     uWindFrequency: uniform(0.17), // spatial frequency — lower = wider gap
     uWindDuty: uniform(0.07), // pulse width as fraction of cycle (0.1 = short, 0.4 = long)
     uWindRamp: uniform(0.026),
     uWindGapVariation: uniform(1),
+
+    tilecolor: uniform(new Color("#e4e4e4")),
   };
 
   constructor(
@@ -99,7 +103,6 @@ export class Terrain {
     this.renderer = renderer;
     this.assets = assets;
 
-    this.terrainMesh.scale.setScalar(1.2);
     this.terrainMaterial = new MeshStandardNodeMaterial({
       side: 2,
     });
@@ -108,15 +111,11 @@ export class Terrain {
       const m1 = mix(
         this.uniforms.sand,
         this.uniforms.grass,
-        smoothstep(0.18, 0.22, positionLocal.y),
+        smoothstep(0.9, 1.16, positionLocal.y),
       );
 
       m1.assign(
-        mix(
-          this.uniforms.deepsand,
-          m1,
-          smoothstep(0.13, 0.18, positionLocal.y),
-        ),
+        mix(this.uniforms.deepsand, m1, smoothstep(0.6, 0.9, positionLocal.y)),
       );
 
       return m1;
@@ -129,6 +128,7 @@ export class Terrain {
     this.debug = Debug.getInstance();
     this.initTweeks();
     this.initTerrain();
+    this.addTiles();
   }
 
   private initTerrain() {
@@ -143,13 +143,13 @@ export class Terrain {
 
   private async initGrass(HeightMap: HeightmapResult) {
     const HeightMapData = await readHeightmap(this.renderer, HeightMap);
-    const GrassGrid = sampleGrid(HeightMapData, 250, 0.25);
+    const GrassGrid = sampleGrid(HeightMapData, 250, 1.2);
 
     const GrassMesh = this.assets.grass_blade.scene.children[0] as Mesh;
 
     const GrassGeometry = GrassMesh.geometry;
 
-    GrassGeometry.scale(0.1, 0.1, 0.1);
+    GrassGeometry.scale(0.5, 0.5, 0.5);
 
     const GrassMaterial = new MeshStandardNodeMaterial();
 
@@ -254,6 +254,28 @@ export class Terrain {
 
     this.scene.add(InstancedGrass);
   }
+
+  private addTiles() {
+    this.tiles = [];
+    const tiles = this.assets.tiles.scene;
+
+    console.log(this.assets.tiles);
+
+    const TileMaterial = new MeshStandardNodeMaterial();
+    TileMaterial.colorNode = Fn(() => {
+      return vec4(this.uniforms.tilecolor, 1);
+    })();
+
+    tiles.traverse((Tile) => {
+      if (Tile instanceof Mesh) {
+        Tile.material = TileMaterial;
+        this.tiles.push(Tile);
+      }
+    });
+
+    this.scene.add(tiles);
+  }
+
   private initTweeks() {
     // ── Terrain ──────────────────────────────────────────────────────────────
     this.debug.add({
@@ -323,6 +345,12 @@ export class Terrain {
       object: this.uniforms.uWindGapVariation,
       key: "value",
       options: { min: 0, max: 1, step: 0.01, label: "Wind Gap Variation" },
+    });
+
+    this.debug.addColor({
+      folder: "Tiles",
+      label: "Tiles Color",
+      initialColor: this.uniforms.tilecolor.value,
     });
   }
 

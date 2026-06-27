@@ -6,6 +6,7 @@ import {
   DirectionalLight,
   Group,
   Mesh,
+  Vector3,
   WebGPURenderer,
 } from "three/webgpu";
 import { PerspectiveCamera, Scene } from "three";
@@ -48,7 +49,7 @@ class App {
       0.1,
       100,
     );
-    this.camera.position.set(-2, 2, 2);
+    this.camera.position.copy(new Vector3(-2, 2, 2).normalize().multiplyScalar(12));
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
     this.clock = new Clock();
