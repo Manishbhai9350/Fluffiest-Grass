@@ -26,7 +26,15 @@ import {
   uniform,
   uv,
   vec4,
-  vec3
+  vec3,
+  mx_noise_float,
+  mx_noise_vec3,
+  mx_worley_noise_float,
+  mx_cell_noise_float,
+  mx_fractal_noise_float,
+  time,
+  vec2,
+  sin,
 } from "three/tsl";
 import {
   BakeHeightmap,
@@ -34,6 +42,10 @@ import {
 } from "../../sampler/gpu.bake.sampler";
 import { readHeightmap, sampleGrid } from "./utils/sample.grid";
 import type { ResolvedManifest } from "../../assets/loader";
+import {
+  mx_perlin_noise_float,
+  mx_perlin_noise_vec3,
+} from "three/src/nodes/materialx/lib/mx_noise.js";
 
 export class Terrain {
   private terrainMesh: Mesh;
@@ -46,6 +58,8 @@ export class Terrain {
   private uniforms = {
     roughness: 0,
     metalness: 0,
+    darkgrass: uniform(new Color("#2E5A1C")),
+    // darkgrass: uniform( new Color("#0B6623")),
     grass: uniform(new Color("#85a02b")),
     sand: uniform(new Color("#d1984d")),
     deepsand: uniform(new Color("#6c514a")),
@@ -55,6 +69,9 @@ export class Terrain {
     // Bounds:
     uMinY: uniform(0),
     uMaxY: uniform(0),
+
+    // Grass:
+    uNoiseFrequency: uniform(19),
   };
 
   constructor(
@@ -68,7 +85,7 @@ export class Terrain {
     this.renderer = renderer;
     this.assets = assets;
 
-    this.terrainMesh.scale.setScalar(0.8);
+    this.terrainMesh.scale.setScalar(1.2);
     this.terrainMaterial = new MeshStandardNodeMaterial({
       side: 2,
     });
@@ -81,7 +98,11 @@ export class Terrain {
       );
 
       m1.assign(
-        mix(this.uniforms.deepsand, m1, smoothstep(0.13, 0.18, positionLocal.y)),
+        mix(
+          this.uniforms.deepsand,
+          m1,
+          smoothstep(0.13, 0.18, positionLocal.y),
+        ),
       );
 
       return m1;
@@ -108,7 +129,7 @@ export class Terrain {
 
   private async initGrass(HeightMap: HeightmapResult) {
     const HeightMapData = await readHeightmap(this.renderer, HeightMap);
-    const GrassGrid = sampleGrid(HeightMapData, 250, 0.2);
+    const GrassGrid = sampleGrid(HeightMapData, 250, 0.25);
 
     const GrassMesh = this.assets.grass_blade.scene.children[0] as Mesh;
 
@@ -119,8 +140,23 @@ export class Terrain {
     const GrassMaterial = new MeshStandardNodeMaterial();
 
     GrassMaterial.colorNode = Fn(() => {
+      const noise = mx_fractal_noise_float(
+        positionWorld.xz
+          .mul(vec2(2, 0.3))
+          .mul(this.uniforms.uNoiseFrequency.mul(0.1))
+          .add(vec2(time, time.mul(0.1).mul(sin(time.mul(0.3))))),
+      );
 
-      return vec4(mix(vec3(.42,.8,.09),vec3(.24,.35,.02),uv().y.oneMinus()),1.0);
+      noise.assign(smoothstep(0, 1, noise));
+
+      // return vec4(noise, 0, 0, 1);
+      const blendedGrassColor = mix(
+        vec3(0.42, 0.8, 0.09),
+        vec3(0.24, 0.35, 0.02),
+        uv().x,
+      );
+      const finalColor = mix(blendedGrassColor, this.uniforms.darkgrass, noise);
+      return vec4(finalColor, 1.0);
     })();
 
     const InstancedGrass = new InstancedMesh(
@@ -128,6 +164,8 @@ export class Terrain {
       GrassMaterial,
       GrassGrid.length,
     );
+
+    // const WUV = new Float32Array(GrassGrid.length * 2)
 
     const dummy = new Object3D();
     const up = new Vector3(0, 1, 0);
@@ -158,6 +196,7 @@ export class Terrain {
   }
 
   private initTweeks() {
+    // Terrain Tweeks
     this.debug.add({
       folder: "Terrain",
       object: this.uniforms,
@@ -192,6 +231,20 @@ export class Terrain {
       folder: "Terrain",
       initialColor: this.uniforms.deepsand.value,
       label: "Sand",
+    });
+
+    // Grass Tweeks;
+
+    this.debug.add({
+      folder: "Grass",
+      object: this.uniforms.uNoiseFrequency,
+      key: "value",
+      options: {
+        min: 0,
+        max: 100,
+        step: 0.01,
+        label: "Noise Freq",
+      },
     });
   }
 

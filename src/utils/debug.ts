@@ -3,7 +3,7 @@ import * as THREE from "three/webgpu";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
-type Bindable = Record<string, unknown>;
+type Bindable = Object;
 
 interface DebugBinding<T extends Bindable> {
   folder: string;
@@ -62,7 +62,7 @@ export class Debug {
 
   private getOrCreateFolder(name: string): FolderApi {
     if (this.folders.has(name)) return this.folders.get(name)!;
-    const folder = this.pane.addFolder({ title: name, expanded: true });
+    const folder = this.pane.addFolder({ title: name, expanded: false });
     this.folders.set(name, folder);
     return folder;
   }
