@@ -1,5 +1,6 @@
 import {
   Box3,
+  BufferAttribute,
   BufferGeometry,
   Color,
   ConstNode,
@@ -44,6 +45,11 @@ import {
   step,
   float,
   floor,
+  atan,
+  cameraPosition,
+  attribute,
+  rotate,
+  PI,
 } from "three/tsl";
 import {
   BakeHeightmap,
@@ -143,7 +149,7 @@ export class Terrain {
 
   private async initGrass(HeightMap: HeightmapResult) {
     const HeightMapData = await readHeightmap(this.renderer, HeightMap);
-    const GrassGrid = sampleGrid(HeightMapData, 250, 1.2);
+    const GrassGrid = sampleGrid(HeightMapData, 150, 1.2);
 
     const GrassMesh = this.assets.grass_blade.scene.children[0] as Mesh;
 
@@ -219,13 +225,28 @@ export class Terrain {
       return vec4(finalColor, 1.0);
     })();
 
+    GrassMaterial.positionNode = Fn(() => {
+      const BasePosition = attribute<"vec3">("aGrassPosition");
+
+      const AngleToCamera = atan(
+        cameraPosition.z.sub(BasePosition.z),
+        cameraPosition.x.sub(BasePosition.x),
+      ).sub(PI.div(2));
+
+      const worldPos = positionWorld.toVar();
+
+      worldPos.xz.assign(rotate(worldPos.xz, AngleToCamera));
+
+      return worldPos;
+    })();
+
     const InstancedGrass = new InstancedMesh(
       GrassGeometry,
       GrassMaterial,
       GrassGrid.length,
     );
 
-    // const WUV = new Float32Array(GrassGrid.length * 2)
+    const GrassPositions = new Float32Array(GrassGrid.length * 3);
 
     const dummy = new Object3D();
     const up = new Vector3(0, 1, 0);
@@ -236,19 +257,25 @@ export class Terrain {
       // normal.set(sample.normal.x, sample.normal.y, sample.normal.z).normalize();
       quat.setFromUnitVectors(up, normal);
       dummy.position.set(sample.x, sample.y, sample.z);
-      dummy.quaternion.copy(quat);
-      dummy.position.set(sample.x, sample.y, sample.z);
-      dummy.quaternion.copy(quat);
 
       // random Y rotation so blades don't all face same direction
-      dummy.rotateY(MathUtils.randFloat(0, Math.PI * 2));
+      // dummy.rotateY(MathUtils.randFloat(0, Math.PI * 2));
 
       // slight scale variation per blade
       dummy.scale.setScalar(MathUtils.randFloat(0.8, 1.2));
 
       dummy.updateMatrix();
       InstancedGrass.setMatrixAt(i, dummy.matrix);
+
+      GrassPositions[i * 3 + 0] = sample.x;
+      GrassPositions[i * 3 + 1] = sample.y;
+      GrassPositions[i * 3 + 1] = sample.z;
     });
+
+    InstancedGrass.geometry.setAttribute(
+      "aGrassPosition",
+      new BufferAttribute(GrassPositions, 2),
+    );
 
     InstancedGrass.instanceMatrix.needsUpdate = true;
 
@@ -258,8 +285,6 @@ export class Terrain {
   private addTiles() {
     this.tiles = [];
     const tiles = this.assets.tiles.scene;
-
-    console.log(this.assets.tiles);
 
     const TileMaterial = new MeshStandardNodeMaterial();
     TileMaterial.colorNode = Fn(() => {
